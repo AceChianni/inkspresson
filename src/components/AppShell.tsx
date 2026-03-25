@@ -1,14 +1,20 @@
-// src/components/AppShell.tsx
+// /components/AppShell.tsx
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { usePathname } from "next/navigation";
+import { signOut } from "firebase/auth";
+import { auth } from "@/lib/firebase";
+import { useAuth } from "@/components/AuthProvider";
 
 type Props = {
   title: string;
   children: React.ReactNode;
 };
+
+type Mode = "light" | "dark";
+type ThemeName = "sand" | "sage" | "dusk" | "rose";
 
 const navItems = [
   { href: "/app", label: "Dashboard" },
@@ -16,68 +22,106 @@ const navItems = [
   { href: "/app/settings", label: "Settings" },
 ] as const;
 
+const isThemeName = (value: string | null): value is ThemeName =>
+  value === "sand" || value === "sage" || value === "dusk" || value === "rose";
+
+const isMode = (value: string | null): value is Mode =>
+  value === "light" || value === "dark";
+
 export default function AppShell({ title, children }: Props) {
   const pathname = usePathname();
-  const [ultraCalm, setUltraCalm] = useState(false);
+  const { user, loading } = useAuth();
+  const pageHeadingId = useId();
 
-  // Persist preference
+  const [mode, setMode] = useState<Mode>("light");
+  const [theme, setTheme] = useState<ThemeName>("sand");
+  const [ready, setReady] = useState(false);
+  const [showMobileAppearance, setShowMobileAppearance] = useState(false);
+
   useEffect(() => {
-    const saved = window.localStorage.getItem("ink_ultra_calm");
-    if (saved === "true") setUltraCalm(true);
+    const savedMode = window.localStorage.getItem("ink_mode");
+    const savedTheme = window.localStorage.getItem("ink_theme");
+
+    const initialMode: Mode = isMode(savedMode)
+      ? savedMode
+      : window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light";
+
+    const initialTheme: ThemeName = isThemeName(savedTheme) ? savedTheme : "sand";
+
+    setMode(initialMode);
+    setTheme(initialTheme);
+
+    document.documentElement.setAttribute("data-mode", initialMode);
+    document.documentElement.setAttribute("data-theme", initialTheme);
+
+    setReady(true);
   }, []);
 
   useEffect(() => {
-    window.localStorage.setItem("ink_ultra_calm", String(ultraCalm));
-  }, [ultraCalm]);
+    if (!ready) return;
+    window.localStorage.setItem("ink_mode", mode);
+    document.documentElement.setAttribute("data-mode", mode);
+  }, [mode, ready]);
+
+  useEffect(() => {
+    if (!ready) return;
+    window.localStorage.setItem("ink_theme", theme);
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [theme, ready]);
+
+  const ultraCalm = mode === "dark";
 
   return (
-    <div
-      className={[
-        "min-h-screen text-neutral-900",
-        ultraCalm ? "bg-neutral-50" : "bg-neutral-50/40",
-      ].join(" ")}
-    >
+    <div className="min-h-screen bg-background text-foreground">
+      <a
+        href="#main-content"
+        className="absolute left-4 top-4 z-[100] -translate-y-20 rounded-xl px-4 py-2 text-sm font-medium shadow-md transition focus:translate-y-0 focus-visible:translate-y-0"
+        style={{
+          background: "rgb(var(--ink-surface))",
+          color: "rgb(var(--ink-text))",
+          border: "1px solid rgb(var(--ink-border))",
+        }}
+      >
+        Skip to main content
+      </a>
+
       <div className="mx-auto max-w-6xl p-4 md:p-8">
         <div className="grid grid-cols-1 gap-6 md:grid-cols-[260px_1fr]">
-          {/* Sidebar (desktop/tablet) */}
           <aside
-            className={[
-              "hidden md:block rounded-2xl bg-white p-5 shadow-sm",
-              ultraCalm
-                ? "border border-neutral-200/50"
-                : "border border-neutral-200/70",
-            ].join(" ")}
+            className="hidden rounded-2xl p-5 shadow-sm md:block"
+            style={{
+              background: "rgb(var(--ink-surface))",
+              border: "1px solid rgb(var(--ink-border))",
+            }}
+            aria-label="Sidebar"
           >
-            {/* Brand */}
             <div className="mb-6">
               <Link href="/" className="flex items-start gap-3">
                 <span
-                  className="mt-1 inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-neutral-200 bg-white"
+                  className="mt-1 inline-flex h-10 w-10 items-center justify-center rounded-2xl"
+                  style={{
+                    border: "1px solid rgb(var(--ink-border))",
+                    background: "rgb(var(--ink-surface-soft))",
+                  }}
                   aria-hidden="true"
                 >
-                  <svg viewBox="0 0 24 24" className="h-5 w-5">
-                    <path
-                      d="M21 14.5A8.5 8.5 0 0 1 9.5 3a7 7 0 1 0 11.5 11.5Z"
-                      fill="none"
-                      stroke="rgb(var(--ink-accent))"
-                      strokeWidth="1.6"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
+                  🌙
                 </span>
 
                 <div>
-                  <div className="text-2xl font-semibold tracking-tight leading-tight">
+                  <div className="text-2xl font-semibold tracking-tight">
                     Inkspression
                   </div>
-                  <div className="mt-1 text-sm text-neutral-600">
+                  <div className="mt-1 text-sm ink-muted">
                     Gentle journaling for busy brains
                   </div>
                 </div>
               </Link>
             </div>
 
-            <nav className="space-y-1">
+            <nav className="space-y-1" aria-label="Primary">
               {navItems.map((item) => (
                 <SideNavLink
                   key={item.href}
@@ -89,124 +133,385 @@ export default function AppShell({ title, children }: Props) {
               ))}
             </nav>
 
-            <div className="mt-8 space-y-3">
-              <div className="rounded-xl bg-neutral-50 p-3 text-sm text-neutral-700">
-                <div className="font-medium text-neutral-900">Low pressure</div>
-                <div className="mt-1">No streaks. No shame. Just return.</div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setUltraCalm((v) => !v)}
-                className={[
-                  "w-full rounded-xl border px-3 py-2 text-sm transition",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--ink-accent),0.25)]",
-                  ultraCalm
-                    ? "border-transparent text-white"
-                    : "border-neutral-200 hover:bg-neutral-100",
-                ].join(" ")}
-                style={
-                  ultraCalm
-                    ? { backgroundColor: "rgb(var(--ink-accent))" }
-                    : undefined
-                }
-                aria-pressed={ultraCalm}
-              >
-                {ultraCalm ? "Ultra calm: On" : "Ultra calm: Off"}
-              </button>
-            </div>
+            <AppearanceControls
+              className="mt-8"
+              ultraCalm={ultraCalm}
+              theme={theme}
+              onToggleMode={() => setMode((m) => (m === "light" ? "dark" : "light"))}
+              onThemeChange={setTheme}
+            />
           </aside>
 
-          {/* Main */}
           <main
-            className={[
-              "rounded-2xl bg-white p-4 shadow-sm md:p-6",
-              ultraCalm ? "border border-neutral-200/50" : "border border-neutral-200/70",
-            ].join(" ")}
+            id="main-content"
+            className="rounded-2xl p-4 shadow-sm md:p-6"
+            style={{
+              background: "rgb(var(--ink-surface))",
+              border: "1px solid rgb(var(--ink-border))",
+            }}
+            aria-labelledby={pageHeadingId}
           >
-            {/* Mobile brand header */}
-            <div className="mb-4 flex items-start justify-between gap-3 md:hidden">
-              <Link href="/" className="flex items-start gap-3">
-                <span
-                  className="mt-1 inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-neutral-200 bg-white"
-                  aria-hidden="true"
+            <header className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h1 id={pageHeadingId} className="text-xl font-semibold">
+                {title}
+              </h1>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowMobileAppearance((v) => !v)}
+                  aria-expanded={showMobileAppearance}
+                  aria-controls="mobile-appearance-panel"
+                  className="md:hidden inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition"
+                  style={{
+                    background: showMobileAppearance
+                      ? "rgb(var(--ink-surface-soft))"
+                      : "rgb(var(--ink-surface))",
+                    border: "1px solid rgb(var(--ink-border))",
+                    color: "rgb(var(--ink-text))",
+                    boxShadow: "var(--ink-shadow-sm)",
+                  }}
                 >
-                  <svg viewBox="0 0 24 24" className="h-5 w-5">
-                    <path
-                      d="M21 14.5A8.5 8.5 0 0 1 9.5 3a7 7 0 1 0 11.5 11.5Z"
-                      fill="none"
-                      stroke="rgb(var(--ink-accent))"
-                      strokeWidth="1.6"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </span>
+                  <span
+                    className="flex h-5 w-5 items-center justify-center rounded-full"
+                    style={{
+                      background: "rgba(var(--ink-accent), 0.12)",
+                      border: "1px solid rgba(var(--ink-accent), 0.18)",
+                      color: "rgb(var(--ink-text))",
+                      fontSize: "0.7rem",
+                    }}
+                    aria-hidden="true"
+                  >
+                    ✦
+                  </span>
 
-                <div>
-                  <div className="text-lg font-semibold tracking-tight leading-tight">
-                    Inkspression
-                  </div>
-                  <div className="mt-0.5 text-xs text-neutral-600">
-                    Gentle journaling
-                  </div>
-                </div>
-              </Link>
+                  Appearance
 
-              <button
-                type="button"
-                onClick={() => setUltraCalm((v) => !v)}
-                className="rounded-xl border border-neutral-200 px-3 py-2 text-sm hover:bg-neutral-100"
-                aria-pressed={ultraCalm}
-              >
-                Calm
-              </button>
-            </div>
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      transform: showMobileAppearance ? "rotate(180deg)" : "rotate(0deg)",
+                      transition: "transform 180ms ease",
+                      color: "rgb(var(--ink-text-soft))",
+                    }}
+                  >
+                    ▾
+                  </span>
+                </button>
 
-            <header className="mb-5 flex items-center justify-between gap-3">
-              <h1 className="text-xl font-semibold">{title}</h1>
+                {loading ? (
+                  <span className="text-xs ink-muted">Checking…</span>
+                ) : user ? (
+                  <>
+                    <span
+                      className="rounded-full px-3 py-1 text-xs font-medium"
+                      style={{
+                        border: "1px solid rgb(var(--ink-border))",
+                        background: "rgb(var(--ink-surface-soft))",
+                        color: "rgb(var(--ink-text-soft))",
+                      }}
+                    >
+                      Signed in
+                    </span>
 
-              <div className="flex items-center gap-2">
-                <span className="rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-xs text-neutral-700">
-                  Demo mode
-                </span>
-
-                <Link
-                  href="/auth"
-                  className="rounded-xl border border-neutral-200 px-3 py-2 text-sm hover:bg-neutral-100"
-                >
-                  Sign in
-                </Link>
+                    <button
+                      type="button"
+                      onClick={() => signOut(auth)}
+                      className="ink-btn ink-btn-secondary"
+                    >
+                      Sign out
+                    </button>
+                  </>
+                ) : (
+                  <Link href="/auth" className="ink-btn ink-btn-secondary">
+                    Sign in
+                  </Link>
+                )}
               </div>
             </header>
 
-            {/* page content */}
+            <div
+              id="mobile-appearance-panel"
+              className="overflow-hidden md:hidden"
+              style={{
+                maxHeight: showMobileAppearance ? "420px" : "0px",
+                opacity: showMobileAppearance ? 1 : 0,
+                marginBottom: showMobileAppearance ? "1.25rem" : "0rem",
+                transition:
+                  "max-height 260ms ease, opacity 180ms ease, margin-bottom 180ms ease",
+              }}
+            >
+              <div
+                className="rounded-2xl p-1"
+                style={{
+                  background: "rgba(var(--ink-accent), 0.05)",
+                  border: "1px solid rgb(var(--ink-border))",
+                  boxShadow: "var(--ink-shadow-sm)",
+                }}
+              >
+                <AppearanceControls
+                  ultraCalm={ultraCalm}
+                  theme={theme}
+                  onToggleMode={() =>
+                    setMode((m) => (m === "light" ? "dark" : "light"))
+                  }
+                  onThemeChange={setTheme}
+                  mobile
+                />
+              </div>
+            </div>
+
             <div className="pb-16 md:pb-0">{children}</div>
           </main>
         </div>
       </div>
 
-      {/* Mobile bottom nav */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-neutral-200 bg-white/95 backdrop-blur md:hidden safe-bottom">
-        <div className="mx-auto flex max-w-6xl items-center justify-around px-4 py-2">
-          {navItems.map((item) => {
-            const active = pathname === item.href;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={[
-                  "rounded-xl px-3 py-2 text-sm",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--ink-accent),0.25)]",
-                  active ? "text-[rgb(var(--ink-accent))] font-medium" : "text-neutral-700",
-                ].join(" ")}
-                aria-current={active ? "page" : undefined}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
+      <nav
+  className="fixed bottom-0 left-0 right-0 z-50 md:hidden"
+  style={{
+    borderTop: "1px solid rgb(var(--ink-border))",
+    background: "rgb(var(--ink-surface))",
+    boxShadow: "0 -8px 24px rgba(0, 0, 0, 0.06)",
+  }}
+  aria-label="Mobile navigation"
+>
+  <div className="safe-bottom grid grid-cols-3 gap-2 px-3 py-2">
+    {navItems.map((item) => {
+      const active = pathname === item.href;
+
+      return (
+        <Link
+          key={item.href}
+          href={item.href}
+          aria-current={active ? "page" : undefined}
+          className="flex min-h-[52px] flex-col items-center justify-center rounded-2xl px-2 py-2 text-center transition"
+          style={{
+            color: active
+              ? "rgb(var(--ink-text))"
+              : "rgb(var(--ink-text-soft))",
+            fontWeight: active ? 600 : 500,
+            background: active
+              ? "rgb(var(--ink-surface-soft))"
+              : "transparent",
+            border: active
+              ? "1px solid rgb(var(--ink-border))"
+              : "1px solid transparent",
+            boxShadow: active ? "var(--ink-shadow-sm)" : "none",
+          }}
+        >
+          <span
+            className="mb-1 h-1.5 w-1.5 rounded-full"
+            style={{
+              background: active
+                ? "rgb(var(--ink-accent))"
+                : "transparent",
+            }}
+            aria-hidden="true"
+          />
+          <span className="text-[0.8rem] leading-none">{item.label}</span>
+        </Link>
+      );
+    })}
+  </div>
+</nav>
+    </div>
+  );
+}
+
+function AppearanceControls({
+  ultraCalm,
+  theme,
+  onToggleMode,
+  onThemeChange,
+  className = "",
+  mobile = false,
+}: {
+  ultraCalm: boolean;
+  theme: ThemeName;
+  onToggleMode: () => void;
+  onThemeChange: (theme: ThemeName) => void;
+  className?: string;
+  mobile?: boolean;
+}) {
+  const themeOptions: {
+    value: ThemeName;
+    label: string;
+    swatch: string;
+  }[] = [
+    { value: "sand", label: "Sand", swatch: "rgb(122 92 72)" },
+    { value: "sage", label: "Sage", swatch: "rgb(92 120 104)" },
+    { value: "dusk", label: "Dusk", swatch: "rgb(111 102 163)" },
+    { value: "rose", label: "Rose", swatch: "rgb(154 96 110)" },
+  ];
+
+  return (
+    <div className={className}>
+      {!mobile ? (
+        <div
+          className="rounded-2xl p-4 text-sm"
+          style={{
+            background: "rgb(var(--ink-surface-soft))",
+            color: "rgb(var(--ink-text-soft))",
+            border: "1px solid rgb(var(--ink-border))",
+            boxShadow: "var(--ink-shadow-sm)",
+          }}
+        >
+          <div
+            style={{
+              color: "rgb(var(--ink-text))",
+              fontWeight: 600,
+            }}
+          >
+            Low pressure
+          </div>
+          <div className="mt-1">No streaks. No shame. Just return.</div>
         </div>
-      </nav>
+      ) : null}
+
+      <div className="space-y-4">
+        <section
+          className="rounded-2xl p-4"
+          style={{
+            background: "rgb(var(--ink-surface))",
+            border: "1px solid rgb(var(--ink-border))",
+            boxShadow: "var(--ink-shadow-sm)",
+          }}
+        >
+          <div className="mb-3">
+            <div
+              className="text-xs font-medium uppercase tracking-[0.14em]"
+              style={{ color: "rgb(var(--ink-text-soft))" }}
+            >
+              Display mode
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onToggleMode}
+            aria-pressed={ultraCalm}
+            aria-label={`Ultra calm mode ${ultraCalm ? "on" : "off"}`}
+            className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left transition"
+            style={{
+              background: "rgb(var(--ink-surface-soft))",
+              border: "1px solid rgb(var(--ink-border))",
+              boxShadow: "var(--ink-shadow-sm)",
+            }}
+          >
+            <span className="flex items-center gap-3">
+              <span
+                className="flex h-9 w-9 items-center justify-center rounded-full"
+                style={{
+                  background: "rgba(var(--ink-accent), 0.12)",
+                  border: "1px solid rgba(var(--ink-accent), 0.18)",
+                  color: "rgb(var(--ink-text))",
+                }}
+                aria-hidden="true"
+              >
+                🌙
+              </span>
+
+              <span>
+                <span
+                  className="block text-sm font-medium"
+                  style={{ color: "rgb(var(--ink-text))" }}
+                >
+                  Ultra calm
+                </span>
+                <span
+                  className="block text-xs"
+                  style={{ color: "rgb(var(--ink-text-soft))" }}
+                >
+                  Softer, darker focus mode
+                </span>
+              </span>
+            </span>
+
+            <span
+              className="relative inline-flex h-7 w-12 items-center rounded-full transition"
+              style={{
+                background: ultraCalm
+                  ? "rgb(var(--ink-accent))"
+                  : "rgb(var(--ink-border))",
+              }}
+              aria-hidden="true"
+            >
+              <span
+                className="absolute h-5 w-5 rounded-full transition"
+                style={{
+                  left: ultraCalm ? "1.45rem" : "0.2rem",
+                  background: "rgb(var(--ink-surface))",
+                  boxShadow: "0 1px 4px rgba(0,0,0,0.18)",
+                }}
+              />
+            </span>
+          </button>
+        </section>
+
+        <section
+          className="rounded-2xl p-4"
+          style={{
+            background: "rgb(var(--ink-surface))",
+            border: "1px solid rgb(var(--ink-border))",
+            boxShadow: "var(--ink-shadow-sm)",
+          }}
+        >
+          <div className="mb-3">
+            <div
+              className="text-xs font-medium uppercase tracking-[0.14em]"
+              style={{ color: "rgb(var(--ink-text-soft))" }}
+            >
+              Color theme
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            {themeOptions.map((option) => {
+              const selected = theme === option.value;
+
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => onThemeChange(option.value)}
+                  aria-pressed={selected}
+                  className="rounded-2xl px-3 py-3 text-left transition"
+                  style={{
+                    background: selected
+                      ? "rgb(var(--ink-surface-soft))"
+                      : "rgb(var(--ink-surface))",
+                    border: selected
+                      ? "1px solid rgb(var(--ink-accent))"
+                      : "1px solid rgb(var(--ink-border))",
+                    boxShadow: selected ? "var(--ink-shadow-sm)" : "none",
+                  }}
+                >
+                  <span className="mb-2 flex items-center gap-2">
+                    <span
+                      className="h-3 w-3 rounded-full"
+                      style={{ background: option.swatch }}
+                      aria-hidden="true"
+                    />
+                    <span
+                      className="text-sm font-medium"
+                      style={{ color: "rgb(var(--ink-text))" }}
+                    >
+                      {option.label}
+                    </span>
+                  </span>
+
+                  <span
+                    className="block text-xs"
+                    style={{ color: "rgb(var(--ink-text-soft))" }}
+                  >
+                    {selected ? "Selected" : "Tap to apply"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      </div>
     </div>
   );
 }
@@ -223,11 +528,16 @@ function SideNavLink({
   return (
     <Link
       href={href}
-      className={[
-        "block rounded-xl px-3 py-2 text-sm transition",
-        active ? "bg-neutral-100 text-neutral-900" : "text-neutral-700 hover:bg-neutral-100",
-      ].join(" ")}
       aria-current={active ? "page" : undefined}
+      className="block rounded-xl px-3 py-2 text-sm transition"
+      style={{
+        background: active ? "rgb(var(--ink-surface-soft))" : "transparent",
+        color: active ? "rgb(var(--ink-text))" : "rgb(var(--ink-text-soft))",
+        border: active
+          ? "1px solid rgb(var(--ink-border))"
+          : "1px solid transparent",
+        fontWeight: active ? 600 : 400,
+      }}
     >
       {children}
     </Link>
