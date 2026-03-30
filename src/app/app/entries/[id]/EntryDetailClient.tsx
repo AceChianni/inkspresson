@@ -7,10 +7,26 @@ import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/AppShell";
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
-import { deleteDoc, doc, getDoc, serverTimestamp, updateDoc } from "firebase/firestore";
+import {
+  deleteDoc,
+  doc,
+  getDoc,
+  serverTimestamp,
+  updateDoc,
+} from "firebase/firestore";
 
-const moods = ["Calm", "Anxious", "Low", "Overwhelmed", "Energized", "Sad"] as const;
-type Mood = (typeof moods)[number];
+const defaultMoods = [
+  "Calm",
+  "Anxious",
+  "Low",
+  "Overwhelmed",
+  "Energized",
+  "Sad",
+];
+
+type Mood = string;
+
+const CUSTOM_MOODS_KEY = "ink_custom_moods";
 
 function formatFull(d?: Date | null) {
   if (!d) return "Just now";
@@ -26,7 +42,6 @@ function formatFull(d?: Date | null) {
 export default function EntryDetailClient({ id }: { id: string }) {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const entryId = id;
 
   const [busy, setBusy] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -35,18 +50,43 @@ export default function EntryDetailClient({ id }: { id: string }) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [mood, setMood] = useState<Mood | null>(null);
+  const [customMoods, setCustomMoods] = useState<string[]>([]);
 
-  const [createdLabel, setCreatedLabel] = useState<string>("");
+  const [createdLabel, setCreatedLabel] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const canEdit = useMemo(() => !loading && !!user, [loading, user]);
+  const allMoods = useMemo(
+    () => [...defaultMoods, ...customMoods] as string[],
+    [customMoods]
+  );
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem(CUSTOM_MOODS_KEY);
+    if (!stored) return;
+
+    try {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        setCustomMoods(parsed);
+      }
+    } catch {
+      // ignore invalid localStorage
+    }
+  }, []);
 
   useEffect(() => {
     async function load() {
       setError(null);
 
       if (loading) return;
+
+      if (!id || typeof id !== "string") {
+        setBusy(false);
+        setError("Invalid entry.");
+        return;
+      }
 
       if (!user) {
         setBusy(false);
@@ -55,8 +95,9 @@ export default function EntryDetailClient({ id }: { id: string }) {
       }
 
       setBusy(true);
+
       try {
-        const ref = doc(db, "users", user.uid, "entries", entryId);
+        const ref = doc(db, "users", user.uid, "entries", id);
         const snap = await getDoc(ref);
 
         if (!snap.exists()) {
@@ -64,61 +105,74 @@ export default function EntryDetailClient({ id }: { id: string }) {
           return;
         }
 
-        const data = snap.data() as any;
-        setTitle((data.title ?? "") as string);
-        setBody((data.body ?? "") as string);
-        setMood((data.mood ?? null) as Mood | null);
+        const data = (snap.data() || {}) as {
+          title?: unknown;
+          body?: unknown;
+          mood?: unknown;
+          createdAt?: { toDate?: () => Date };
+        };
 
-        const ts = data.createdAt?.toDate?.() as Date | undefined;
+        setTitle(typeof data.title === "string" ? data.title : "");
+        setBody(typeof data.body === "string" ? data.body : "");
+        setMood(typeof data.mood === "string" ? data.mood : null);
+
+        const ts = data.createdAt?.toDate?.();
         setCreatedLabel(formatFull(ts));
-      } catch (e: any) {
-        setError(e?.message ?? "Could not load entry.");
+      } catch (e: unknown) {
+        const message =
+          e instanceof Error ? e.message : "Could not load entry.";
+        setError(message);
       } finally {
         setBusy(false);
       }
     }
 
     load();
-  }, [user, loading, entryId]);
+  }, [user, loading, id]);
 
   async function handleSave() {
-    if (!user) return;
+    if (!user || !id) return;
 
     setSaving(true);
     setToast(null);
     setError(null);
 
     try {
-      const ref = doc(db, "users", user.uid, "entries", entryId);
+      const ref = doc(db, "users", user.uid, "entries", id);
       await updateDoc(ref, {
         title: title.trim() || null,
         body: body.trim() || "",
         mood: mood ?? null,
         updatedAt: serverTimestamp(),
       });
-      setToast("Saved.");
-      setTimeout(() => setToast(null), 1500);
-    } catch (e: any) {
-      setError(e?.message ?? "Could not save changes.");
+      setToast("Saved softly.");
+      window.setTimeout(() => setToast(null), 1500);
+    } catch (e: unknown) {
+      const message =
+        e instanceof Error ? e.message : "Could not save changes.";
+      setError(message);
     } finally {
       setSaving(false);
     }
   }
 
   async function handleDelete() {
-    if (!user) return;
-    const ok = confirm("Delete this entry? This can’t be undone.");
+    if (!user || !id) return;
+
+    const ok = window.confirm("Delete this entry? This can’t be undone.");
     if (!ok) return;
 
     setDeleting(true);
     setError(null);
 
     try {
-      const ref = doc(db, "users", user.uid, "entries", entryId);
+      const ref = doc(db, "users", user.uid, "entries", id);
       await deleteDoc(ref);
       router.push("/app/entries");
-    } catch (e: any) {
-      setError(e?.message ?? "Could not delete entry.");
+    } catch (e: unknown) {
+      const message =
+        e instanceof Error ? e.message : "Could not delete entry.";
+      setError(message);
     } finally {
       setDeleting(false);
     }
@@ -128,7 +182,7 @@ export default function EntryDetailClient({ id }: { id: string }) {
     <AppShell title="Entry">
       <section className="space-y-4">
         <div className="flex items-center justify-between gap-3">
-          <Link href="/app/entries" className="text-sm underline text-neutral-700">
+          <Link href="/app/entries" className="ink-link text-sm">
             Back to entries
           </Link>
 
@@ -137,7 +191,7 @@ export default function EntryDetailClient({ id }: { id: string }) {
               type="button"
               onClick={handleSave}
               disabled={!canEdit || saving || busy}
-              className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
+              className="ink-btn ink-btn-primary"
             >
               {saving ? "Saving…" : "Save"}
             </button>
@@ -146,7 +200,7 @@ export default function EntryDetailClient({ id }: { id: string }) {
               type="button"
               onClick={handleDelete}
               disabled={!canEdit || deleting || busy}
-              className="rounded-xl border border-neutral-200 px-4 py-2 text-sm hover:bg-neutral-100 disabled:opacity-50"
+              className="ink-btn ink-btn-secondary"
             >
               {deleting ? "Deleting…" : "Delete"}
             </button>
@@ -154,36 +208,35 @@ export default function EntryDetailClient({ id }: { id: string }) {
         </div>
 
         {busy ? (
-          <div className="text-sm text-neutral-600">Loading…</div>
+          <div className="ink-subtext text-sm">Loading…</div>
         ) : error ? (
-          <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700">
+          <div className="ink-alert text-sm" role="alert">
             {error}
           </div>
         ) : (
           <>
-            <div className="rounded-2xl border border-neutral-200/70 p-4">
+            <div className="ink-card p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <div className="text-xs text-neutral-500">Created</div>
-                  <div className="text-sm font-medium">{createdLabel}</div>
+                  <div className="text-xs ink-subtext">Created</div>
+                  <div
+                    className="text-sm font-medium"
+                    style={{ color: "rgb(var(--ink-text))" }}
+                  >
+                    {createdLabel}
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  {moods.map((m) => {
+                  {allMoods.map((m) => {
                     const selected = m === mood;
+
                     return (
                       <button
                         key={m}
                         type="button"
                         onClick={() => setMood(selected ? null : m)}
-                        className={[
-                          "rounded-xl border px-3 py-2 text-sm transition",
-                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--ink-accent),0.25)]",
-                          selected
-                            ? "border-transparent text-white"
-                            : "border-neutral-200 hover:bg-neutral-100",
-                        ].join(" ")}
-                        style={selected ? { backgroundColor: "rgb(var(--ink-accent))" } : undefined}
+                        className={`ink-chip ${selected ? "ink-chip-active" : ""}`}
                         aria-pressed={selected}
                       >
                         {m}
@@ -194,25 +247,35 @@ export default function EntryDetailClient({ id }: { id: string }) {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-neutral-200/70 p-4">
-              <label className="text-sm font-medium">Title</label>
+            <div className="ink-card p-4">
+              <label
+                className="text-sm font-medium"
+                style={{ color: "rgb(var(--ink-text))" }}
+              >
+                Title
+              </label>
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="mt-2 w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-neutral-900/10"
+                className="ink-input mt-2"
                 placeholder="Untitled entry"
               />
             </div>
 
-            <div className="rounded-2xl border border-neutral-200/70 p-4">
-              <label className="text-sm font-medium">Entry</label>
+            <div className="ink-card p-4">
+              <label
+                className="text-sm font-medium"
+                style={{ color: "rgb(var(--ink-text))" }}
+              >
+                Entry
+              </label>
               <textarea
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
-                className="mt-2 min-h-[320px] w-full resize-y rounded-xl border border-neutral-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-neutral-900/10"
+                className="ink-input ink-textarea mt-2"
                 placeholder="No pressure. Start with one sentence."
               />
-              {toast && <div className="mt-3 text-sm text-neutral-600">{toast}</div>}
+              {toast ? <div className="mt-3 text-sm ink-subtext">{toast}</div> : null}
             </div>
           </>
         )}

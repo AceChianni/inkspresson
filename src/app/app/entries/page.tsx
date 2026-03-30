@@ -16,15 +16,7 @@ type Entry = {
   createdAtMs: number;
 };
 
-const moodOptions = [
-  "All",
-  "Calm",
-  "Anxious",
-  "Low",
-  "Overwhelmed",
-  "Energized",
-  "Sad",
-] as const;
+const CUSTOM_MOODS_KEY = "ink_custom_moods";
 
 function formatRelative(d?: Date | null) {
   if (!d) return "Just now";
@@ -46,9 +38,9 @@ export default function EntriesPage() {
   const [err, setErr] = useState<string | null>(null);
 
   const [searchText, setSearchText] = useState("");
-  const [moodFilter, setMoodFilter] =
-    useState<(typeof moodOptions)[number]>("All");
+  const [moodFilter, setMoodFilter] = useState<string>("All");
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
+  const [customMoods, setCustomMoods] = useState<string[]>([]);
 
   const demo = useMemo<Entry[]>(
     () => [
@@ -78,6 +70,20 @@ export default function EntriesPage() {
   );
 
   useEffect(() => {
+    const stored = window.localStorage.getItem(CUSTOM_MOODS_KEY);
+    if (!stored) return;
+
+    try {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        setCustomMoods(parsed);
+      }
+    } catch {
+      // ignore invalid localStorage
+    }
+  }, []);
+
+  useEffect(() => {
     async function load() {
       setErr(null);
 
@@ -99,13 +105,18 @@ export default function EntriesPage() {
         const snap = await getDocs(q);
 
         const rows: Entry[] = snap.docs.map((docSnap) => {
-          const data = docSnap.data() as any;
-          const ts = data.createdAt?.toDate?.() as Date | undefined;
+          const data = (docSnap.data() || {}) as {
+            title?: unknown;
+            mood?: unknown;
+            createdAt?: { toDate?: () => Date };
+          };
+
+          const ts = data.createdAt?.toDate?.();
 
           return {
             id: docSnap.id,
-            title: data.title ?? null,
-            mood: data.mood ?? null,
+            title: typeof data.title === "string" ? data.title : null,
+            mood: typeof data.mood === "string" ? data.mood : null,
             createdAtLabel: formatRelative(ts),
             createdAtMs: ts ? ts.getTime() : 0,
           };
@@ -122,16 +133,31 @@ export default function EntriesPage() {
     load();
   }, [user, loading, demo]);
 
+  const moodOptions = useMemo(() => {
+    const moodsFromEntries = items
+      .map((entry) => (typeof entry.mood === "string" ? entry.mood : null))
+      .filter((mood): mood is string => Boolean(mood));
+
+    return ["All", ...Array.from(new Set([...moodsFromEntries, ...customMoods]))];
+  }, [items, customMoods]);
+
   const filteredItems = useMemo(() => {
     const q = searchText.trim().toLowerCase();
 
     const filtered = items.filter((entry) => {
-      const title = (entry.title ?? "").toLowerCase();
-      const mood = (entry.mood ?? "").toLowerCase();
+      const title =
+        typeof entry.title === "string" ? entry.title.toLowerCase() : "";
 
-      const matchesSearch = !q || title.includes(q) || mood.includes(q);
+      const mood =
+        typeof entry.mood === "string" ? entry.mood.toLowerCase() : "";
+
+      const matchesSearch =
+        !q || (title && title.includes(q)) || (mood && mood.includes(q));
+
       const matchesMood =
-        moodFilter === "All" ? true : entry.mood === moodFilter;
+        moodFilter === "All"
+          ? true
+          : typeof entry.mood === "string" && entry.mood === moodFilter;
 
       return matchesSearch && matchesMood;
     });
@@ -149,10 +175,10 @@ export default function EntriesPage() {
     : err
     ? `Error loading entries: ${err}`
     : filteredItems.length === 0
-    ? items.length === 0
-      ? "No entries yet."
-      : "No entries match your search or filter."
-    : `${filteredItems.length} ${filteredItems.length === 1 ? "entry" : "entries"} shown.`;
+      ? items.length === 0
+        ? "No entries yet."
+        : "No entries match your search or filter."
+      : `${filteredItems.length} ${filteredItems.length === 1 ? "entry" : "entries"} shown.`;
 
   return (
     <AppShell title="Entries">
@@ -163,8 +189,8 @@ export default function EntriesPage() {
               {loading
                 ? "Loading…"
                 : user
-                ? "Your saved entries."
-                : "Demo entries available while you explore."}
+                  ? "Your saved entries."
+                  : "Demo entries available while you explore."}
             </p>
           </div>
 
@@ -181,7 +207,10 @@ export default function EntriesPage() {
         </p>
 
         <fieldset className="ink-card p-4">
-          <legend className="text-sm font-medium text-neutral-900">
+          <legend
+            className="text-sm font-medium"
+            style={{ color: "rgb(var(--ink-text))" }}
+          >
             Filter entries
           </legend>
 
@@ -189,7 +218,8 @@ export default function EntriesPage() {
             <div className="w-full md:max-w-sm">
               <label
                 htmlFor="entry-search"
-                className="mb-1 block text-sm font-medium text-neutral-900"
+                className="mb-1 block text-sm font-medium"
+                style={{ color: "rgb(var(--ink-text))" }}
               >
                 Search
               </label>
@@ -208,16 +238,15 @@ export default function EntriesPage() {
               <div className="md:w-52">
                 <label
                   htmlFor="entry-mood-filter"
-                  className="mb-1 block text-sm font-medium text-neutral-900"
+                  className="mb-1 block text-sm font-medium"
+                  style={{ color: "rgb(var(--ink-text))" }}
                 >
                   Mood
                 </label>
                 <select
                   id="entry-mood-filter"
                   value={moodFilter}
-                  onChange={(e) =>
-                    setMoodFilter(e.target.value as (typeof moodOptions)[number])
-                  }
+                  onChange={(e) => setMoodFilter(e.target.value)}
                   className="ink-input"
                 >
                   {moodOptions.map((m) => (
@@ -231,7 +260,8 @@ export default function EntriesPage() {
               <div className="md:w-44">
                 <label
                   htmlFor="entry-sort-order"
-                  className="mb-1 block text-sm font-medium text-neutral-900"
+                  className="mb-1 block text-sm font-medium"
+                  style={{ color: "rgb(var(--ink-text))" }}
                 >
                   Sort by date
                 </label>
@@ -251,19 +281,13 @@ export default function EntriesPage() {
           </div>
         </fieldset>
 
-        {err && (
-          <div
-            className="ink-card-soft p-4 text-sm text-neutral-700"
-            role="alert"
-          >
+        {err ? (
+          <div className="ink-alert text-sm" role="alert">
             {err}
           </div>
-        )}
+        ) : null}
 
-        <div
-          className="grid gap-4 md:grid-cols-2"
-          aria-label="Entry results"
-        >
+        <div className="grid gap-4 md:grid-cols-2" aria-label="Entry results">
           {busy ? (
             <div className="ink-card p-5 text-sm ink-muted" aria-live="polite">
               Loading entries…
@@ -271,7 +295,7 @@ export default function EntriesPage() {
           ) : filteredItems.length === 0 ? (
             <div className="ink-card p-6 text-sm ink-muted md:col-span-2">
               {items.length === 0
-                ? "No entries yet. Start with one sentence."
+                ? "Nothing here yet. Just begin when you’re ready."
                 : "No entries match your search or filter."}
             </div>
           ) : (
@@ -280,19 +304,29 @@ export default function EntriesPage() {
                 ? "/auth"
                 : `/app/entries/${e.id}`;
 
-              const entryTitle = e.title?.trim() ? e.title : "Untitled entry";
-              const entryMeta = `${e.mood ? `${e.mood}. ` : ""}${e.createdAtLabel}.`;
+              const entryTitle =
+                typeof e.title === "string" && e.title.trim()
+                  ? e.title
+                  : "Untitled entry";
+
+              const safeMood = typeof e.mood === "string" ? e.mood : null;
+              const entryMeta = `${safeMood ? `${safeMood}. ` : ""}${e.createdAtLabel}.`;
 
               return (
                 <Link
                   key={e.id}
                   href={href}
-                  className="ink-card block p-5 transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
-                  aria-label={`${entryTitle}. ${entryMeta} ${user ? "Saved entry." : "Demo entry."}`}
+                  className="ink-card ink-card-link p-5 hover:-translate-y-0.5 hover:shadow-md"
+                  aria-label={`${entryTitle}. ${entryMeta} ${
+                    user ? "Saved entry." : "Demo entry."
+                  }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-medium text-neutral-900">
+                      <div
+                        className="truncate text-sm font-medium"
+                        style={{ color: "rgb(var(--ink-text))" }}
+                      >
                         {entryTitle}
                       </div>
                       <div className="mt-1 text-xs ink-muted">
@@ -300,11 +334,11 @@ export default function EntriesPage() {
                       </div>
                     </div>
 
-                    {e.mood && (
+                    {typeof e.mood === "string" && e.mood.trim() ? (
                       <span className="ink-chip ink-chip-accent shrink-0">
                         {e.mood}
                       </span>
-                    )}
+                    ) : null}
                   </div>
 
                   <div className="mt-4 flex items-center justify-between text-xs ink-muted">

@@ -2,39 +2,63 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/AppShell";
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 
-const moods = ["Calm", "Anxious", "Low", "Overwhelmed", "Energized", "Sad"] as const;
-type Mood = (typeof moods)[number];
+const defaultMoods = [
+  "Calm",
+  "Anxious",
+  "Low",
+  "Overwhelmed",
+  "Energized",
+  "Sad",
+];
+
+type Mood = string;
+
+const CUSTOM_MOODS_KEY = "ink_custom_moods";
 
 export default function NewEntryPage() {
   const { user, loading } = useAuth();
+  const router = useRouter();
 
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
 
   const [mood, setMood] = useState<Mood | null>(null);
-  const [editingMood, setEditingMood] = useState(false);
+  const [customMoods, setCustomMoods] = useState<string[]>([]);
+
+  const [addingMood, setAddingMood] = useState(false);
+  const [newMood, setNewMood] = useState("");
 
   const [saving, setSaving] = useState(false);
   const [showGate, setShowGate] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
+  const allMoods = [...defaultMoods, ...customMoods];
+
   useEffect(() => {
-    const saved = sessionStorage.getItem("ink_mood") as Mood | null;
-    if (saved && moods.includes(saved)) setMood(saved);
+    const saved = sessionStorage.getItem("ink_mood");
+    if (saved) setMood(saved);
   }, []);
 
-  const showPicker = editingMood || !mood;
+  useEffect(() => {
+    const stored = localStorage.getItem(CUSTOM_MOODS_KEY);
+    if (!stored) return;
+
+    try {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) setCustomMoods(parsed);
+    } catch {}
+  }, []);
 
   const canSave = useMemo(() => {
-    if (loading) return false;
-    if (!user) return false;
-    return title.trim().length > 0 || body.trim().length > 0;
+    if (loading || !user) return false;
+    return Boolean(title.trim() || body.trim());
   }, [loading, user, title, body]);
 
   async function handleSave() {
@@ -48,7 +72,6 @@ export default function NewEntryPage() {
     if (!canSave) return;
 
     setSaving(true);
-    setShowGate(false);
     setToast(null);
 
     try {
@@ -60,173 +83,138 @@ export default function NewEntryPage() {
         updatedAt: serverTimestamp(),
       });
 
-      setTitle("");
-      setBody("");
-      setToast("Entry saved.");
-      setTimeout(() => setToast(null), 1500);
+      router.push("/app/entries");
     } catch (e: any) {
       setToast(e?.message ?? "Could not save entry.");
-      setTimeout(() => setToast(null), 2500);
     } finally {
       setSaving(false);
     }
   }
 
+  function handleAddMood() {
+    const trimmed = newMood.trim();
+    if (!trimmed) return;
+
+    if (allMoods.includes(trimmed)) {
+      setNewMood("");
+      setAddingMood(false);
+      return;
+    }
+
+    const updated = [...customMoods, trimmed];
+    setCustomMoods(updated);
+    localStorage.setItem(CUSTOM_MOODS_KEY, JSON.stringify(updated));
+
+    setMood(trimmed);
+    localStorage.setItem("ink_mood", trimmed);
+
+    setNewMood("");
+    setAddingMood(false);
+  }
+
   return (
     <AppShell title="New entry">
-      <section className="space-y-4" aria-describedby="new-entry-status">
-        <p id="new-entry-status" className="sr-only" aria-live="polite">
-          {loading
-            ? "Checking sign-in status."
-            : saving
-            ? "Saving entry."
-            : toast
-            ? toast
-            : showGate
-            ? "You are in demo mode. Sign in to save entries."
-            : "Create a new journal entry."}
-        </p>
-
+      <section className="space-y-4">
         <div className="grid gap-4 md:grid-cols-2">
           <div className="ink-card p-4">
-            <label
-              htmlFor="entry-title"
-              className="text-sm font-medium text-neutral-900"
-            >
-              Title
-            </label>
+            <label className="text-sm font-medium">Title</label>
             <input
-              id="entry-title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className="ink-input mt-2"
               placeholder="What’s on your mind?"
-              autoComplete="off"
             />
           </div>
 
-          <fieldset className="ink-card p-4">
-            <div className="flex items-center justify-between gap-3">
-              <legend className="text-sm font-medium text-neutral-900">
-                Mood
-              </legend>
+          <div className="ink-card p-4">
+            <div className="text-sm font-medium">Mood</div>
 
-              {mood && (
-                <button
-                  type="button"
-                  onClick={() => setEditingMood((v) => !v)}
-                  aria-expanded={showPicker}
-                  aria-controls="mood-picker"
-                  className="ink-btn ink-btn-secondary"
-                >
-                  {editingMood ? "Done" : "Change"}
-                </button>
-              )}
+            <div className="mt-3 flex flex-wrap gap-2">
+              {allMoods.map((m) => {
+                const selected = m === mood;
+
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => {
+                      const next = selected ? null : m;
+                      setMood(next);
+                      if (next) sessionStorage.setItem("ink_mood", next);
+                      else sessionStorage.removeItem("ink_mood");
+                    }}
+                    className={`ink-chip ${selected ? "ink-chip-active" : ""}`}
+                  >
+                    {m}
+                  </button>
+                );
+              })}
+
+              <button
+                type="button"
+                onClick={() => setAddingMood(true)}
+                className="ink-chip ink-chip-action"
+              >
+                + Custom
+              </button>
             </div>
 
-            {mood && !showPicker && (
-              <div className="mt-3">
-                <span
-                  className="ink-chip ink-chip-accent"
-                  aria-label={`Selected mood: ${mood}`}
+            {addingMood && (
+              <div className="mt-3 flex gap-2">
+                <input
+                  value={newMood}
+                  onChange={(e) => setNewMood(e.target.value)}
+                  placeholder="Your mood..."
+                  className="ink-input"
+                />
+
+                <button
+                  type="button"
+                  onClick={handleAddMood}
+                  className="ink-btn ink-btn-primary"
                 >
-                  {mood}
-                </span>
+                  Add
+                </button>
               </div>
             )}
-
-            {showPicker && (
-              <div
-                id="mood-picker"
-                className="mt-3 flex flex-wrap gap-2"
-                role="group"
-                aria-label="Choose a mood"
-              >
-                {moods.map((m) => {
-                  const selected = m === mood;
-
-                  return (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => {
-                        const next = selected ? null : m;
-                        setMood(next);
-                        if (next) sessionStorage.setItem("ink_mood", next);
-                        else sessionStorage.removeItem("ink_mood");
-                        setEditingMood(false);
-                      }}
-                      aria-pressed={selected}
-                      aria-label={`${m}${selected ? ", selected" : ""}`}
-                      className={[
-                        "rounded-xl border px-3 py-2 text-sm transition",
-                        selected
-                          ? "border-transparent text-white"
-                          : "border-neutral-200 hover:bg-neutral-100",
-                      ].join(" ")}
-                      style={
-                        selected
-                          ? { backgroundColor: "rgb(var(--ink-accent))" }
-                          : undefined
-                      }
-                    >
-                      {m}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </fieldset>
+          </div>
         </div>
 
         <div className="ink-card p-4">
-          <label
-            htmlFor="entry-body"
-            className="text-sm font-medium text-neutral-900"
-          >
-            Entry
-          </label>
+          <label className="text-sm font-medium">Entry</label>
+
           <textarea
-            id="entry-body"
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            className="ink-input mt-2 min-h-[280px] resize-y"
+            className="ink-input ink-textarea mt-2"
             placeholder="No pressure. Start with one sentence."
           />
 
-          <div className="mt-4 flex items-center justify-between gap-3">
-            <p className="text-xs ink-muted">
+          <div className="mt-4 flex items-center justify-between">
+            <span className="text-xs ink-muted">
               Tip: write the smallest true thing.
-            </p>
+            </span>
 
             <button
-              type="button"
               onClick={handleSave}
               disabled={saving || loading}
-              className="ink-btn ink-btn-primary disabled:opacity-50"
+              className="ink-btn ink-btn-primary"
             >
               {saving ? "Saving…" : "Save entry"}
             </button>
           </div>
 
-          {!loading && !user && showGate && (
-            <div
-              className="ink-card-soft mt-3 p-3 text-sm text-neutral-700"
-              role="alert"
-            >
+          {!user && showGate && (
+            <div className="ink-alert mt-3 text-sm">
               You’re in demo mode.{" "}
-              <Link href="/auth" className="font-medium underline">
+              <Link href="/auth" className="ink-link">
                 Sign in
               </Link>{" "}
               to save entries.
             </div>
           )}
 
-          {toast && !showGate && (
-            <div className="mt-3 text-sm text-neutral-700" role="status">
-              {toast}
-            </div>
-          )}
+          {toast && <div className="mt-3 text-sm ink-subtext">{toast}</div>}
         </div>
       </section>
     </AppShell>

@@ -200,33 +200,20 @@ export default function AppShell({ title, children }: Props) {
                 </button>
 
                 {loading ? (
-                  <span className="text-xs ink-muted">Checking…</span>
-                ) : user ? (
-                  <>
-                    <span
-                      className="rounded-full px-3 py-1 text-xs font-medium"
-                      style={{
-                        border: "1px solid rgb(var(--ink-border))",
-                        background: "rgb(var(--ink-surface-soft))",
-                        color: "rgb(var(--ink-text-soft))",
-                      }}
-                    >
-                      Signed in
-                    </span>
-
-                    <button
-                      type="button"
-                      onClick={() => signOut(auth)}
-                      className="ink-btn ink-btn-secondary"
-                    >
-                      Sign out
-                    </button>
-                  </>
-                ) : (
-                  <Link href="/auth" className="ink-btn ink-btn-secondary">
-                    Sign in
-                  </Link>
-                )}
+  <span className="text-xs ink-muted">Checking…</span>
+) : user ? (
+  <button
+    type="button"
+    onClick={() => signOut(auth)}
+    className="ink-btn ink-btn-secondary"
+  >
+    Sign out
+  </button>
+) : (
+  <Link href="/auth" className="ink-btn ink-btn-secondary">
+    Sign in
+  </Link>
+)}
               </div>
             </header>
 

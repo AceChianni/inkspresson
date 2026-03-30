@@ -81,7 +81,6 @@ html[data-mode="dark"] {
 
 /* ---------------------------------
    Personal color themes
-   Accent only, to preserve contrast
 ---------------------------------- */
 html[data-theme="sand"] {
   --ink-accent: 122 92 72;
@@ -163,6 +162,9 @@ textarea {
   padding-top: env(safe-area-inset-top);
 }
 
+/* ---------------------------------
+   Surfaces
+---------------------------------- */
 .ink-card,
 .ink-panel {
   border: 1px solid rgb(var(--ink-border));
@@ -181,6 +183,28 @@ textarea {
   border-radius: var(--ink-radius);
 }
 
+.ink-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 1px solid rgb(var(--ink-border));
+  background: rgb(var(--ink-surface-soft));
+  border-radius: 1rem;
+  padding: 0.9rem 1rem;
+}
+
+.ink-alert {
+  border: 1px solid rgb(var(--ink-border));
+  background: rgb(var(--ink-surface-soft));
+  color: rgb(var(--ink-text));
+  border-radius: 1rem;
+  padding: 0.9rem 1rem;
+}
+
+/* ---------------------------------
+   Inputs
+---------------------------------- */
 .ink-input {
   width: 100%;
   border: 1px solid rgb(var(--ink-border));
@@ -208,6 +232,14 @@ textarea {
   box-shadow: 0 0 0 4px rgba(var(--ink-accent), 0.14);
 }
 
+.ink-textarea {
+  min-height: 220px;
+  resize: vertical;
+}
+
+/* ---------------------------------
+   Buttons
+---------------------------------- */
 .ink-btn {
   display: inline-flex;
   align-items: center;
@@ -251,6 +283,19 @@ textarea {
   background: rgb(var(--ink-surface-soft));
 }
 
+.ink-btn-danger {
+  border: 1px solid rgb(var(--ink-border));
+  background: rgb(var(--ink-surface));
+  color: rgb(var(--ink-text));
+}
+
+.ink-btn-danger:hover {
+  background: rgb(var(--ink-surface-soft));
+}
+
+/* ---------------------------------
+   Chips
+---------------------------------- */
 .ink-chip {
   display: inline-flex;
   align-items: center;
@@ -264,6 +309,7 @@ textarea {
   background: rgb(var(--ink-surface));
   color: rgb(var(--ink-text));
   transition:
+    transform 120ms ease,
     background-color 180ms ease,
     border-color 180ms ease,
     box-shadow 180ms ease,
@@ -272,6 +318,11 @@ textarea {
 
 .ink-chip:hover {
   background: rgb(var(--ink-surface-soft));
+  transform: translateY(-1px);
+}
+
+.ink-chip:active {
+  transform: scale(0.96);
 }
 
 .ink-chip[aria-pressed="true"],
@@ -281,6 +332,32 @@ textarea {
   border-color: rgb(var(--ink-accent));
 }
 
+.ink-chip-action {
+  border: 1px dashed rgb(var(--ink-border));
+  background: rgb(var(--ink-surface-soft));
+  color: rgb(var(--ink-text));
+}
+
+.ink-chip-action:hover {
+  background: rgb(var(--ink-surface));
+}
+
+.ink-chip-danger {
+  min-height: 36px;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid rgb(var(--ink-border));
+  background: rgb(var(--ink-surface));
+  color: rgb(var(--ink-text-soft));
+}
+
+.ink-chip-danger:hover {
+  background: rgb(var(--ink-surface-soft));
+  color: rgb(var(--ink-text));
+}
+
+/* ---------------------------------
+   Text helpers
+---------------------------------- */
 .ink-muted,
 .ink-subtext {
   color: rgb(var(--ink-text-soft));
@@ -293,6 +370,9 @@ textarea {
   font-weight: 500;
 }
 
+/* ---------------------------------
+   Link cards
+---------------------------------- */
 .ink-card-link {
   display: block;
   text-decoration: none;
