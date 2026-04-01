@@ -1,5 +1,4 @@
 // src/app/app/page.tsx
-
 "use client";
 
 import Link from "next/link";
@@ -23,8 +22,11 @@ type Mood = DefaultMood | string;
 
 type CardEntry = { id: string; title: string; meta: string };
 
-const CUSTOM_MOODS_KEY = "ink_custom_moods";
 const CURRENT_MOOD_KEY = "ink_mood";
+
+function getCustomMoodKey(uid?: string | null) {
+  return uid ? `ink_custom_moods_${uid}` : null;
+}
 
 function formatRelative(d?: Date | null) {
   if (!d) return "Just now";
@@ -44,6 +46,12 @@ function normalizeMoodLabel(value: string) {
   return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
 }
 
+const demoRecent: CardEntry[] = [
+  { id: "demo-1", title: "A small win", meta: "Calm · Today" },
+  { id: "demo-2", title: "Overthinking spiral", meta: "Anxious · Yesterday" },
+  { id: "demo-3", title: "Soft reset", meta: "Low · 2 days ago" },
+];
+
 export default function DashboardPage() {
   const { user, loading } = useAuth();
 
@@ -55,12 +63,7 @@ export default function DashboardPage() {
   const [editingMoodValue, setEditingMoodValue] = useState("");
   const [manageCustomMoods, setManageCustomMoods] = useState(false);
 
-  const [recent, setRecent] = useState<CardEntry[]>([
-    { id: "demo-1", title: "A small win", meta: "Calm · Today" },
-    { id: "demo-2", title: "Overthinking spiral", meta: "Anxious · Yesterday" },
-    { id: "demo-3", title: "Soft reset", meta: "Low · 2 days ago" },
-  ]);
-
+  const [recent, setRecent] = useState<CardEntry[]>(demoRecent);
   const [busy, setBusy] = useState(false);
 
   const allMoods = useMemo(() => {
@@ -87,29 +90,58 @@ export default function DashboardPage() {
   }, [mood]);
 
   useEffect(() => {
-    const savedMood = window.localStorage.getItem(CURRENT_MOOD_KEY);
-    const savedCustomMoods = window.localStorage.getItem(CUSTOM_MOODS_KEY);
-
-    if (savedCustomMoods) {
-      try {
-        const parsed = JSON.parse(savedCustomMoods) as string[];
-        if (Array.isArray(parsed)) {
-          setCustomMoods(parsed);
-        }
-      } catch {
-        // ignore invalid storage
-      }
-    }
-
+    const savedMood = window.sessionStorage.getItem(CURRENT_MOOD_KEY);
     if (savedMood) {
       setMood(savedMood);
+    } else {
+      setMood(null);
     }
   }, []);
 
   useEffect(() => {
+    if (!user) {
+      setCustomMoods([]);
+      setManageCustomMoods(false);
+      setShowCustomMoodInput(false);
+      setCustomMoodInput("");
+      setEditingMood(null);
+      setEditingMoodValue("");
+      return;
+    }
+
+    const key = getCustomMoodKey(user.uid);
+    if (!key) {
+      setCustomMoods([]);
+      return;
+    }
+
+    const stored = window.localStorage.getItem(key);
+    if (!stored) {
+      setCustomMoods([]);
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(stored) as string[];
+      if (Array.isArray(parsed)) {
+        setCustomMoods(parsed);
+      } else {
+        setCustomMoods([]);
+      }
+    } catch {
+      setCustomMoods([]);
+    }
+  }, [user]);
+
+  useEffect(() => {
     async function loadRecent() {
       if (loading) return;
-      if (!user) return;
+
+      if (!user) {
+        setRecent(demoRecent);
+        setBusy(false);
+        return;
+      }
 
       setBusy(true);
       try {
@@ -124,13 +156,17 @@ export default function DashboardPage() {
         const rows = snap.docs.map((docSnap) => {
           const data = docSnap.data() as {
             createdAt?: { toDate?: () => Date };
-            mood?: string;
-            title?: string;
+            mood?: unknown;
+            title?: unknown;
           };
 
           const ts = data.createdAt?.toDate?.();
-          const entryMood = data.mood ? String(data.mood) : null;
-          const title = (data.title && String(data.title).trim()) || "Untitled entry";
+          const entryMood =
+            typeof data.mood === "string" ? data.mood : null;
+          const title =
+            typeof data.title === "string" && data.title.trim()
+              ? data.title.trim()
+              : "Untitled entry";
           const when = formatRelative(ts);
 
           return {
@@ -151,12 +187,16 @@ export default function DashboardPage() {
 
   function persistCustomMoods(next: string[]) {
     setCustomMoods(next);
-    window.localStorage.setItem(CUSTOM_MOODS_KEY, JSON.stringify(next));
+
+    const key = getCustomMoodKey(user?.uid);
+    if (!key) return;
+
+    window.localStorage.setItem(key, JSON.stringify(next));
   }
 
   function handleMoodSelect(nextMood: string) {
     setMood(nextMood);
-    window.localStorage.setItem(CURRENT_MOOD_KEY, nextMood);
+    window.sessionStorage.setItem(CURRENT_MOOD_KEY, nextMood);
     setShowCustomMoodInput(false);
     setCustomMoodInput("");
     setEditingMood(null);
@@ -177,7 +217,7 @@ export default function DashboardPage() {
     }
 
     setMood(normalized);
-    window.localStorage.setItem(CURRENT_MOOD_KEY, normalized);
+    window.sessionStorage.setItem(CURRENT_MOOD_KEY, normalized);
     setCustomMoodInput("");
     setShowCustomMoodInput(false);
   }
@@ -208,7 +248,7 @@ export default function DashboardPage() {
 
     if (mood === originalMood) {
       setMood(normalized);
-      window.localStorage.setItem(CURRENT_MOOD_KEY, normalized);
+      window.sessionStorage.setItem(CURRENT_MOOD_KEY, normalized);
     }
 
     setEditingMood(null);
@@ -221,7 +261,7 @@ export default function DashboardPage() {
 
     if (mood === targetMood) {
       setMood(null);
-      window.localStorage.removeItem(CURRENT_MOOD_KEY);
+      window.sessionStorage.removeItem(CURRENT_MOOD_KEY);
     }
 
     if (editingMood === targetMood) {
@@ -242,7 +282,7 @@ export default function DashboardPage() {
                 className="text-sm font-semibold"
                 style={{ color: "rgb(var(--ink-text))" }}
               >
-                How are you right now?
+                How are we feeling right now?
               </h2>
               <p className="ink-subtext mt-1 text-sm">{helperText}</p>
             </div>
@@ -416,11 +456,11 @@ export default function DashboardPage() {
             One next action
           </h2>
           <p className="ink-subtext mt-1 text-sm">
-            Keep decisions simple: one clear step forward.
+            Begin when you're ready.
           </p>
 
           <Link href="/app/new" className="ink-btn ink-btn-primary mt-4 inline-flex">
-            Start a journal entry
+            Time to write it out
           </Link>
         </div>
 
@@ -430,7 +470,7 @@ export default function DashboardPage() {
               className="text-sm font-semibold"
               style={{ color: "rgb(var(--ink-text))" }}
             >
-              Recent entries
+              Recent feels
             </h2>
 
             <Link className="ink-link text-sm" href="/app/entries">
@@ -444,7 +484,7 @@ export default function DashboardPage() {
             ) : recent.length === 0 ? (
               <div className="ink-card-soft p-4 text-sm md:col-span-3">
                 <span className="ink-subtext">
-                  Nothing here yet. Just begin when you’re ready.
+                  Nothing here yet. Start when you feel ready.
                 </span>
               </div>
             ) : (

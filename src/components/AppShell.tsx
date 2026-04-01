@@ -1,4 +1,4 @@
-// /components/AppShell.tsx
+// src/components/AppShell.tsx
 "use client";
 
 import Link from "next/link";
@@ -25,9 +25,6 @@ const navItems = [
 const isThemeName = (value: string | null): value is ThemeName =>
   value === "sand" || value === "sage" || value === "dusk" || value === "rose";
 
-const isMode = (value: string | null): value is Mode =>
-  value === "light" || value === "dark";
-
 export default function AppShell({ title, children }: Props) {
   const pathname = usePathname();
   const { user, loading } = useAuth();
@@ -42,12 +39,7 @@ export default function AppShell({ title, children }: Props) {
     const savedMode = window.localStorage.getItem("ink_mode");
     const savedTheme = window.localStorage.getItem("ink_theme");
 
-    const initialMode: Mode = isMode(savedMode)
-      ? savedMode
-      : window.matchMedia("(prefers-color-scheme: dark)").matches
-        ? "dark"
-        : "light";
-
+    const initialMode: Mode = savedMode === "dark" ? "dark" : "light";
     const initialTheme: ThemeName = isThemeName(savedTheme) ? savedTheme : "sand";
 
     setMode(initialMode);
@@ -71,7 +63,26 @@ export default function AppShell({ title, children }: Props) {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme, ready]);
 
+  async function handleSignOut() {
+    try {
+      const uid = user?.uid;
+
+      sessionStorage.removeItem("ink_mood");
+
+      if (uid) {
+        localStorage.removeItem(`ink_custom_moods_${uid}`);
+      }
+
+      await signOut(auth);
+      window.location.href = "/";
+    } catch (error) {
+      console.error("Sign out failed:", error);
+    }
+  }
+
   const ultraCalm = mode === "dark";
+
+  if (!ready) return null;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -98,7 +109,7 @@ export default function AppShell({ title, children }: Props) {
             aria-label="Sidebar"
           >
             <div className="mb-6">
-              <Link href="/" className="flex items-start gap-3">
+              <Link href={user ? "/app" : "/"} className="flex items-start gap-3">
                 <span
                   className="mt-1 inline-flex h-10 w-10 items-center justify-center rounded-2xl"
                   style={{
@@ -200,20 +211,20 @@ export default function AppShell({ title, children }: Props) {
                 </button>
 
                 {loading ? (
-  <span className="text-xs ink-muted">Checking…</span>
-) : user ? (
-  <button
-    type="button"
-    onClick={() => signOut(auth)}
-    className="ink-btn ink-btn-secondary"
-  >
-    Sign out
-  </button>
-) : (
-  <Link href="/auth" className="ink-btn ink-btn-secondary">
-    Sign in
-  </Link>
-)}
+                  <span className="text-xs ink-muted">Checking…</span>
+                ) : user ? (
+                  <button
+                    type="button"
+                    onClick={handleSignOut}
+                    className="ink-btn ink-btn-secondary"
+                  >
+                    Sign out
+                  </button>
+                ) : (
+                  <Link href="/auth" className="ink-btn ink-btn-secondary">
+                    Sign in
+                  </Link>
+                )}
               </div>
             </header>
 
@@ -254,53 +265,53 @@ export default function AppShell({ title, children }: Props) {
       </div>
 
       <nav
-  className="fixed bottom-0 left-0 right-0 z-50 md:hidden"
-  style={{
-    borderTop: "1px solid rgb(var(--ink-border))",
-    background: "rgb(var(--ink-surface))",
-    boxShadow: "0 -8px 24px rgba(0, 0, 0, 0.06)",
-  }}
-  aria-label="Mobile navigation"
->
-  <div className="safe-bottom grid grid-cols-3 gap-2 px-3 py-2">
-    {navItems.map((item) => {
-      const active = pathname === item.href;
+        className="fixed bottom-0 left-0 right-0 z-50 md:hidden"
+        style={{
+          borderTop: "1px solid rgb(var(--ink-border))",
+          background: "rgb(var(--ink-surface))",
+          boxShadow: "0 -8px 24px rgba(0, 0, 0, 0.06)",
+        }}
+        aria-label="Mobile navigation"
+      >
+        <div className="safe-bottom grid grid-cols-3 gap-2 px-3 py-2">
+          {navItems.map((item) => {
+            const active = pathname === item.href;
 
-      return (
-        <Link
-          key={item.href}
-          href={item.href}
-          aria-current={active ? "page" : undefined}
-          className="flex min-h-[52px] flex-col items-center justify-center rounded-2xl px-2 py-2 text-center transition"
-          style={{
-            color: active
-              ? "rgb(var(--ink-text))"
-              : "rgb(var(--ink-text-soft))",
-            fontWeight: active ? 600 : 500,
-            background: active
-              ? "rgb(var(--ink-surface-soft))"
-              : "transparent",
-            border: active
-              ? "1px solid rgb(var(--ink-border))"
-              : "1px solid transparent",
-            boxShadow: active ? "var(--ink-shadow-sm)" : "none",
-          }}
-        >
-          <span
-            className="mb-1 h-1.5 w-1.5 rounded-full"
-            style={{
-              background: active
-                ? "rgb(var(--ink-accent))"
-                : "transparent",
-            }}
-            aria-hidden="true"
-          />
-          <span className="text-[0.8rem] leading-none">{item.label}</span>
-        </Link>
-      );
-    })}
-  </div>
-</nav>
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                className="flex min-h-[52px] flex-col items-center justify-center rounded-2xl px-2 py-2 text-center transition"
+                style={{
+                  color: active
+                    ? "rgb(var(--ink-text))"
+                    : "rgb(var(--ink-text-soft))",
+                  fontWeight: active ? 600 : 500,
+                  background: active
+                    ? "rgb(var(--ink-surface-soft))"
+                    : "transparent",
+                  border: active
+                    ? "1px solid rgb(var(--ink-border))"
+                    : "1px solid transparent",
+                  boxShadow: active ? "var(--ink-shadow-sm)" : "none",
+                }}
+              >
+                <span
+                  className="mb-1 h-1.5 w-1.5 rounded-full"
+                  style={{
+                    background: active
+                      ? "rgb(var(--ink-accent))"
+                      : "transparent",
+                  }}
+                  aria-hidden="true"
+                />
+                <span className="text-[0.8rem] leading-none">{item.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 }

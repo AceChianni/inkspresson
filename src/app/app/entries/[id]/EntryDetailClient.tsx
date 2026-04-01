@@ -26,7 +26,10 @@ const defaultMoods = [
 
 type Mood = string;
 
-const CUSTOM_MOODS_KEY = "ink_custom_moods";
+/* ✅ USER-SCOPED KEY */
+function getCustomMoodKey(uid?: string | null) {
+  return uid ? `ink_custom_moods_${uid}` : null;
+}
 
 function formatFull(d?: Date | null) {
   if (!d) return "Just now";
@@ -57,25 +60,42 @@ export default function EntryDetailClient({ id }: { id: string }) {
   const [toast, setToast] = useState<string | null>(null);
 
   const canEdit = useMemo(() => !loading && !!user, [loading, user]);
+
   const allMoods = useMemo(
     () => [...defaultMoods, ...customMoods] as string[],
     [customMoods]
   );
 
+  /* ---------------- LOAD CUSTOM MOODS (FIXED) ---------------- */
   useEffect(() => {
-    const stored = window.localStorage.getItem(CUSTOM_MOODS_KEY);
-    if (!stored) return;
+    if (!user) {
+      setCustomMoods([]);
+      return;
+    }
+
+    const key = getCustomMoodKey(user.uid);
+    if (!key) return;
+
+    const stored = window.localStorage.getItem(key);
+
+    if (!stored) {
+      setCustomMoods([]);
+      return;
+    }
 
     try {
       const parsed = JSON.parse(stored);
       if (Array.isArray(parsed)) {
         setCustomMoods(parsed);
+      } else {
+        setCustomMoods([]);
       }
     } catch {
-      // ignore invalid localStorage
+      setCustomMoods([]);
     }
-  }, []);
+  }, [user]);
 
+  /* ---------------- LOAD ENTRY ---------------- */
   useEffect(() => {
     async function load() {
       setError(null);
@@ -130,6 +150,7 @@ export default function EntryDetailClient({ id }: { id: string }) {
     load();
   }, [user, loading, id]);
 
+  /* ---------------- SAVE ---------------- */
   async function handleSave() {
     if (!user || !id) return;
 
@@ -145,6 +166,7 @@ export default function EntryDetailClient({ id }: { id: string }) {
         mood: mood ?? null,
         updatedAt: serverTimestamp(),
       });
+
       setToast("Saved softly.");
       window.setTimeout(() => setToast(null), 1500);
     } catch (e: unknown) {
@@ -156,6 +178,7 @@ export default function EntryDetailClient({ id }: { id: string }) {
     }
   }
 
+  /* ---------------- DELETE ---------------- */
   async function handleDelete() {
     if (!user || !id) return;
 
@@ -168,6 +191,8 @@ export default function EntryDetailClient({ id }: { id: string }) {
     try {
       const ref = doc(db, "users", user.uid, "entries", id);
       await deleteDoc(ref);
+
+      /* ✅ CLEAN NAV */
       router.push("/app/entries");
     } catch (e: unknown) {
       const message =
@@ -188,7 +213,6 @@ export default function EntryDetailClient({ id }: { id: string }) {
 
           <div className="flex items-center gap-2">
             <button
-              type="button"
               onClick={handleSave}
               disabled={!canEdit || saving || busy}
               className="ink-btn ink-btn-primary"
@@ -197,7 +221,6 @@ export default function EntryDetailClient({ id }: { id: string }) {
             </button>
 
             <button
-              type="button"
               onClick={handleDelete}
               disabled={!canEdit || deleting || busy}
               className="ink-btn ink-btn-secondary"
@@ -210,19 +233,14 @@ export default function EntryDetailClient({ id }: { id: string }) {
         {busy ? (
           <div className="ink-subtext text-sm">Loading…</div>
         ) : error ? (
-          <div className="ink-alert text-sm" role="alert">
-            {error}
-          </div>
+          <div className="ink-alert text-sm">{error}</div>
         ) : (
           <>
             <div className="ink-card p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <div className="text-xs ink-subtext">Created</div>
-                  <div
-                    className="text-sm font-medium"
-                    style={{ color: "rgb(var(--ink-text))" }}
-                  >
+                  <div className="text-sm font-medium">
                     {createdLabel}
                   </div>
                 </div>
@@ -234,10 +252,10 @@ export default function EntryDetailClient({ id }: { id: string }) {
                     return (
                       <button
                         key={m}
-                        type="button"
                         onClick={() => setMood(selected ? null : m)}
-                        className={`ink-chip ${selected ? "ink-chip-active" : ""}`}
-                        aria-pressed={selected}
+                        className={`ink-chip ${
+                          selected ? "ink-chip-active" : ""
+                        }`}
                       >
                         {m}
                       </button>
@@ -248,34 +266,24 @@ export default function EntryDetailClient({ id }: { id: string }) {
             </div>
 
             <div className="ink-card p-4">
-              <label
-                className="text-sm font-medium"
-                style={{ color: "rgb(var(--ink-text))" }}
-              >
-                Title
-              </label>
+              <label className="text-sm font-medium">Title</label>
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 className="ink-input mt-2"
-                placeholder="Untitled entry"
               />
             </div>
 
             <div className="ink-card p-4">
-              <label
-                className="text-sm font-medium"
-                style={{ color: "rgb(var(--ink-text))" }}
-              >
-                Entry
-              </label>
+              <label className="text-sm font-medium">Entry</label>
               <textarea
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
                 className="ink-input ink-textarea mt-2"
-                placeholder="No pressure. Start with one sentence."
               />
-              {toast ? <div className="mt-3 text-sm ink-subtext">{toast}</div> : null}
+              {toast && (
+                <div className="mt-3 text-sm ink-subtext">{toast}</div>
+              )}
             </div>
           </>
         )}
