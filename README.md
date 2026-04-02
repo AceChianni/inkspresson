@@ -4,7 +4,7 @@ Inkspression is a neurodivergent-friendly journaling and productivity platform d
 
 ## 🔗 Live Demo
 View the project here:
-https://your-link.vercel.app
+https://inkspresson.vercel.app/
 
 ## ✨ Features
 
