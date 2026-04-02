@@ -1,36 +1,56 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Inkspression
 
-## Getting Started
+Inkspression is a neurodivergent-friendly journaling and productivity platform designed to reduce overwhelm and make reflection easier to start and return to.
 
-First, run the development server:
+## 🔗 Live Demo
+View the project here:
+https://your-link.vercel.app
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## ✨ Features
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- 🧠 Mood-based journaling
+- 📝 Low-distraction writing environment
+- 🌙 Calm, low-density UI
+- 🔁 No streaks, no pressure mechanics
+- 🎨 Personalized themes
+- 📱 Mobile-first design
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 🧠 Design Philosophy
 
-## Learn More
+- Reduce friction at the moment of starting
+- Support inconsistent energy levels
+- Remove performance-based pressure
+- Keep interaction calm, simple, and forgiving
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 🛠 Tech Stack
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- React
+- Tailwind CSS
+- Firebase
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 🚧 Status
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Active development.
+
+Currently focused on UX refinement, onboarding flow, and personalization systems.
+
+---
+
+## 🔮 Future Improvements
+
+- Adaptive UI based on mood input
+- Faster onboarding (<60 seconds)
+- Personalized prompts
+- Offline-first journaling support
+
+---
+
+## 💡 Why This Matters
+
+Inkspression explores how journaling tools can feel safe and accessible for users who struggle with consistency, overwhelm, or traditional productivity systems.
